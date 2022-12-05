@@ -1,5 +1,4 @@
 /*
-
 En este TP vamos a trabajar con Prototipos en JavaScript.
 En este lenguaje, las funciones pueden (usadas de forma adecuada)
 ser constructores de objetos. Para que esto ocurra, una función
@@ -8,7 +7,6 @@ describirá el nuevo objeto construido.
 La función en si, puede asignar slots del nuevo elemento creado
 (haciendo referencia a this), y puede además hacer cualquier otra
 cosa que se considere adecuada.
-
 En este caso, DomElement es una función que nos permitirá crear
 objetos, la cual se define a continuación:
 */
@@ -20,11 +18,12 @@ objetos, la cual se define a continuación:
  * @param type The type of the dom element (e.g. 'div', 'p', etc.)
  * @param childrenDefinition The childrens of this current element.
  */
-function DomElement(type, childrenDefinition) {
+ function DomElement(type, childrenDefinition) {
     this.type = type;
     this.styles = {};
     this.children = [];
-    this.event = {};
+    this.eventOn = {};
+    this.eventOff = {};
     this.contents = '';
     
     for (let index = 0; index < (childrenDefinition || []).length; index++) {
@@ -32,13 +31,6 @@ function DomElement(type, childrenDefinition) {
         var definition = childrenDefinition[index];
         var newElement = new DomElement(definition.type, definition.children);
         newElement.__proto__ = this;
-        //para no acceder de una
-        if(newElement.type === 'h1'){
-            newElement.contents = 'soy un H1';
-        }
-        if(newElement.type === 'p'){
-            newElement.contents = 'soy un P';
-        }
         this.children.push(newElement);
         
 
@@ -51,18 +43,14 @@ function DomElement(type, childrenDefinition) {
  este código en un navegador ni nada parecido. Estaremos
  simulando parcialmente la forma en que un browser trabaja
  "por atrás", esa es la idea del TP.
-
  Así, cada elemento, tiene un tipo y una lista de hijos
  (ya que las etiquetas del DOM se anidan).
-
  En JS, todo objeto tiene un prototipo, identificado en el
  slot __proto__. En el caso de las funciones, hay un atributo
  especial llamado prototype, que será el objeto que actúa de
  prototipo para todo objeto que sea creado con esa función.
-
  Por ejemplo, si hacemos DomElement.prototype, estamos hablando
  del prototipo de cualquier objeto creado con new DomElement(...)
-
  Podemos modificar de diversas formas ese objeto, como se
  hace a continuación.
 */
@@ -152,7 +140,6 @@ var dom = new DomElement(definition.type, definition.children);
 Ahora vamos a querer agregar estílos a los elementos del DOM,
 simulando lo que hace el Browser cuando, luego de analizar el DOM,
 les agrega los estilos tomados del CSS.
-
 Agreguemos algunos estilos a diversos elementos.
 */
 
@@ -200,71 +187,67 @@ var styles = {
 /*
 Estos estilos simulan lo que se leería de un CSS. Y lo que queremos es
 poder aplicar todos estilos a nuestro DOM.
-
 El objetivo, es poder aplicar esos estilos a cada elemento del dom
 según indique la regla asociada.
-
 Ej. si la regla es "h1", entonces el estilo se aplica a todos los elementos
 de tipo h1, pero si es "body h1" entonces se aplica a los h1 que están
 dentro de body.
-
 Una característica importante de los estilos es que se heredan según jerarquía.
 Si por ejemplo, "body" tiene como estilo color "red", entonces todos los hijos
 de body también tendrán color "red", sin necesidad de agregar ese atributo a cada
 uno de los hijos.
-
 Por ej. pensemos el siguiente grupo de nodos en el dom
-
 Node html {}
   Node head {}
   Node body {background:red, color:blue}
     Node div {}
       Node div {size:17, color:green}
         Node h1 {}
-
 Si bien h1 no tiene ningún estilo directamente asociado, sus "verdaderos"
 estilos son aquellos que surjen de heredar de sus padres.
 Entonces h1 tiene los estilos {background:red, size:17, color:green}. El
 color es verde ya que si un hijo tiene un estilo que tenía el padre,
 lo sobreescribe, de forma similar al overriding.
-
 Entonces haremos primero las siguientes cosas:
 a) Agregaremos el método a todo nodo del dom, addStyles, que dada
 una definición de estilos que representa un css, asigna los estilos
 de esa definición a los correspondientes nodos del DOM.
-
 b) Luego implemente para todo nodo el método getFullStyle que
 describe todos los estilos que tiene un nodo (que incluyen los
 propios y los heredados).
-
 c) Implemente para todo nodo el método viewStyleHierarchy, que
 funciona de forma similar a toString, pero en donde se muestran
 absolutamente todos los estilos, incluyendo los heredados, y
 no solo aquellos que tienen asociados.
 */
-function applyStyles(dom, styles) {
-    for (let index = 0; index < dom.children.length; index++) {
-      var element = dom.children[index];
-      element.styles = { ...element.styles, ...dom.styles };
+DomElement.prototype.addStyles = function(styles) {
+    for (let index = 0; index < this.children.length; index++) {
+      var element = this.children[index];
+      element.styles = { ...element.styles, ...this.styles };
       if (styles[element.type]) {
         element.styles = { ...element.styles, ...styles[element.type] };
       }
-      if (styles[dom.type + " " + element.type]) {
-        dom.styles = { ...element.styles, ...styles[element.type] };
+      if (styles[this.type + " " + element.type]) {
+        this.styles = { ...element.styles, ...styles[element.type] };
       }
-      applyStyles(element, styles);
-    }
-  }
-  
-  DomElement.prototype.getStyle = function (typeElement) {
-    for(let index = 0; index < dom.children.length; index++){
-        var element = dom.children[index];
-        if (element.type === typeElement) {
-            console.log(element.type, element.styles);
-        }
-        element.getStyle(typeElement);
+      element.addStyles(styles);
     }
   };
+
+DomElement.prototype.getStyle = function (nodo) {
+    let propio = {};
+    var heredado = {};
+    propio = {...nodo.styles};
+    for(element in nodo.styles){
+        var padre = nodo.__proto__;
+        if(element in padre.styles && padre.styles[element] == nodo.styles[element]){
+            heredado[element] = padre.styles[element];
+            delete propio[element];
+        }
+        nodo.getStyle(padre);
+    }
+    return {propio,heredado};
+}
   function viewStyleHierarchy(dom) {
     for (let index = 0; index < dom.children.length; index++) {
       console.log('Tipo: ',dom.children[index].type,' ,estilo: ', dom.children[index].styles);
@@ -272,138 +255,137 @@ function applyStyles(dom, styles) {
       viewStyleHierarchy(element);
     }
   }
-  
-  applyStyles(dom, styles);
-  viewStyleHierarchy(dom);
+console.log('-----------------APPLYS-------------------');
+dom.addStyles(styles);
+console.log('---------------GETSTYLE----------------------');
+nodoDiv = dom.children[1].children[0].children[0];
+nodoH1 = dom.children[1].children[0].children[0].children[0];
+nodoP =dom.children[1].children[0].children[0].children[1];
+console.log(nodoDiv.styles);
+console.log(dom.getStyle(nodoDiv));
+
+console.log("-----");
+console.log(nodoH1.styles);
+console.log(dom.getStyle(nodoH1));
+console.log("-----");
+console.log(nodoP.styles);
+console.log(dom.getStyle(nodoP));
+
+console.log('---------------viewStyleHierarchy----------------------');
+viewStyleHierarchy(dom);
 /**************** PUNTO 2 ******************************/
 
 /*
 Los elementos del DOM en un navegador pueden reaccionar a eventos
 que el usuario realiza sobre ellos. Vamos a simular ese proceso.
-
 Para que distintos elementos del DOM puedan reaccionar ante
 diversos eventos. Cada elemento del dom debe entender tres
 metodos más:
-
 * on(nombreDeEvento, handler)
 * off(nombreDeEvento)
 * handle(nombreDeEvento)
-
 Por ejemplo, podemos decir
-
 dom.children[1].children[0].children[0].on('click', function() {
     console.log('Se apretó click en html body div div');
     return true;
 })
-
 El código de la función queda asociado al evento 'click' para ese
 elemento del dom, y se activará cuando se haga el handle del evento.
-
 dom.children[1].children[0].children[0].handle('click');
-
-
 El tema es que queremos poder usar 'this' en la función para referirnos
 al objeto que acaba de hacer el "handle" de la función. Ej.
-
 dom.children[1].children[0].children[0].on('click', function() {
     console.log('Se apretó click en un ' + this.type);
     return true;
 })
-
 Esto puede llegar a ser un problema, ya que hay que analizar quién es this,
 según el contexto de ejecución. Ojo.
-
 Por otro lado, cuando se hace el handling de un evento, este realiza
 el proceso de bubbling-up, es decir, todo padre que también sepa manejar
 el evento del mismo nombre debe activar el evento.
-
 Por ejemplo, si activamos 'click' en dom.children[1].children[0].children[0]
 y dom.children[1] también sabe manejar 'click', entonces, luego de ejecutar
 el 'click' para dom.children[1].children[0].children[0], se deberá hacer el
 bubbling-up para que dom.children[1] maneje 'click'.
-
 Hay una excepción, sin embargo. Cuando el handler de un hijo describe falso
 luego de ejecutar, el bubbling-up se detiene.
-
 off por su parte, desactiva el handler asociado a un evento.
-
 Se pide entonces que realice los cambios pertinentes para que los elementos
 del dom puedan tener este comportamiento.
 */
 
 // aca tendria q ver que se ejecute la funcion
 DomElement.prototype.on = function (events, handler) {
-    //aca this es el nodo del dom
-    this.event = { ...this.event, [events]:handler };
-    
+    if(this.eventOff[events]){
+        delete this.eventOff[events];
+    } 
+    this.eventOn = { ...this.eventOn, [events]:handler };
   };
-
-DomElement.prototype.handle = function (events) {
-    //aca this sigue siendo el nodo del dom
-    
-    if (this.event[events]) {   
-        this.event[events].call(this);
+DomElement.prototype.off = function (events) {
+    if(this.eventOn[events]){   
+        this.eventOff = {...this.eventOff, [events]: this.eventOn[events]};
+        delete this.eventOn[events];
     }
-    //agregar condicion que corte cuando el tipo padre es html this.__proto__.type !== 'html'
-    if(this.__proto__ && this.__proto__.type !== 'html' ){
+};
+DomElement.prototype.handle = function (events) {
+    var seSigueEjecutando = true;
+    if (this.eventOn[events]) {   
+        seSigueEjecutando = this.eventOn[events].call(this);
+    }
+    if(this.__proto__ && seSigueEjecutando && this.__proto__.type !== 'html'  ){
         this.__proto__.handle(events);
     }
 };
+console.log('-----------------ON-------------------');
 
-DomElement.prototype.off = function (events) {
-    this.event[events] = null;
-};
-console.log("--------EL NODO---------");
-console.log(dom.children[1].children[0].children[0]);
-console.log("--------EL SE CARGA LA FUNCION QUE SE QUIERE EJECUTAR EN EL NODO---------");
-dom.children[1].children[0].children[0].on('click', function() {
-    //aca el this es la funcion
-    
-    console.log('Se apretó click aen un ' + this.type);
-    return true;
-});
-dom.children[1].children[0].on('click', function() {
-    //aca el this es la funcion
-    
+dom.children[1].children[0].children[0].children[0].on('click', function() {    
     console.log('Se apretó click en un ' + this.type);
     return true;
 });
-console.log("-----------------RESULTADO POST ON-----------------");
-console.log(dom.children[1].children[0].children[0]);
-console.log("-----------------SE CARGÓ LA FUNCION-----------------");
-
-dom.children[1].children[0].children[0].handle('click');
-
+//caso para que siga bubblingUP
+dom.children[1].children[0].children[0].on('click', function() {    
+    console.log('Se apretó click en un ' + this.type);
+    return true;
+});
+//caso para que no siga bubblingUP
+/*
+dom.children[1].children[0].children[0].on('click', function() {    
+    console.log('Se apretó click en un ' + this.type);
+    return false;
+});
+*/
+dom.children[1].children[0].on('click', function() { 
+    console.log('Se apretó click en un ' + this.type);
+    return true;
+});
+console.log('-----------------HANDLE-------------------');
+dom.children[1].children[0].children[0].children[0].handle('click');
+console.log('-----------------OFF-------------------');
+dom.children[1].children[0].children[0].off('click');
+dom.children[1].children[0].children[0].children[0].handle('click');
 /**************** PUNTO 3 ******************************/
 
 /*
 Queremos poder mostrar los nodos del dom de forma bonita
 en la terminal, mediante el metodo display. Es decir,
 otra especie de toString para los nodos.
-
 dom.display()
-
 No todo nodo es visible sin embargo. Solo los elementos del body
 deben mostrarse en este caso, ya que el head y html son solo
 contenedores. Lo mismo ocurre con div, section y aside, que son
 elementos contenedores invisibles.
-
 Así, en este caso, solo vamos a mostrar los elementos h1 y p.
 Pero ¿Qué mostramos de ellos? Para hacer la cosa más divertida, vamos
 a agregar un atributo "contents" a cualquier nodo, que nos permita
 agregar un texto a esos elementos como contenido. Ese texto será el
 que se muestre cuando llamemos a display.
-
 Más aún, cada elemento se muestra de forma distinta según su tipo.
 p muestra contents tal cual, pero h1 lo muestra todo en mayúscula,
 siempre.
-
 Además el color del texto y del fondo depende del estilo del elemento,
 por lo que vamos a mostrarlo en color en la consola.
 (Ver https://stackoverflow.com/questions/9781218/how-to-change-node-jss-console-font-color)
-
 Por ejemplo,
-
 Node html {}
   Node head {}
   Node body {background:red, color:blue}
@@ -412,9 +394,7 @@ Node html {}
         Node h1 contents="Titulo 1" {}
         Node p contents="Hola mundo" {}
         Node p contents="Esto es un texto" {color: "red"}
-
 Mostraría:
-
 TITULO 1
 Hola mundo
 Esto es un texto (en rojo)
@@ -443,4 +423,16 @@ DomElement.prototype.display = function () {
         this.children[i].display();
     }
 };
+
+dom.children[1].children[0].children[0].children[0].contents = 'Titulo 1';
+dom.children[1].children[0].children[0].children[1].contents = 'Hola mundo';
+dom.children[1].children[0].children[0].children[2].contents = 'Esto es un texto';
+
+dom.children[1].children[0].children[1].children[0].contents = 'Titulo 2';
+dom.children[1].children[0].children[1].children[1].contents = 'Hola mundo';
+dom.children[1].children[0].children[1].children[2].contents = 'Esto es un texto';
+
+dom.children[1].children[1].children[0].contents = 'Titulo 3';
+dom.children[1].children[1].children[1].contents = 'Hola mundo';
+dom.children[1].children[1].children[2].contents = 'Esto es un texto';
 dom.display();
